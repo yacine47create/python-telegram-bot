@@ -1,0 +1,54 @@
+from telegram import Update
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+import secrets
+from flask import Flask, redirect, render_template_string
+
+# Flask server for hosting fake pages
+app = Flask(__name__)
+link_storage = {}
+
+@app.route('/fake/<link_id>')
+def fake_page(link_id):
+    original_url = link_storage.get(link_id)
+    if not original_url:
+        return "Link expired or invalid."
+    # Fake HTML with meta refresh redirect
+    return render_template_string('''
+        <html>
+            <head>
+                <title>Verification Page</title>
+                <meta http-equiv="refresh" content="5;url={{ original_url }}">
+            </head>
+            <body>
+                <h1>Checking security... Please wait.</h1>
+            </body>
+        </html>
+    ''', original_url=original_url)
+
+# Start Flask in a separate thread
+import threading
+threading.Thread(target=app.run, kwargs={'port': 5000}).start()
+
+# Telegram Bot
+def start(update: Update, context: CallbackContext):
+    update.message.reply_text("Send me a URL to generate a fake entry page.")
+
+def generate_fake_link(update: Update, context: CallbackContext):
+    original_url = update.message.text
+    link_id = secrets.token_urlsafe(8)
+    link_storage[link_id] = original_url
+    # Replace with your Ngrok/public URL
+    fake_url = f"https://your-ngrok-url.ngrok.io/fake/{link_id}"
+    update.message.reply_text(f"Fake entry link: {fake_url}")
+
+def main():
+    updater = Updater("
+7272222088:AAHhoqIox1L_UJVPN_kAsK4D5ZfnvwbFnoM", use_context=True)
+    dp = updater.dispatcher
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, generate_fake_link))
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == "__main__":
+    main()
